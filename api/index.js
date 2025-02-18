@@ -7,7 +7,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const app = express();
 dotenv.config();
-supportedFunctions = [
+const supportedFunctions = [
   "AND",
   "OR",
   "NOT",
@@ -76,7 +76,7 @@ supportedFunctions = [
   "BEGINS",
 ];
 
-supportedOperators = [
+const supportedOperators = [
   "+",
   "-",
   "/",
@@ -89,7 +89,6 @@ supportedOperators = [
   "<=",
   "<>",
 ];
-console.log(process.env.GITHUB_TOKEN);
 
 app.use(express.json());
 
@@ -192,4 +191,6 @@ app.post("/generate-formula", async (req, res) => {
   }
 });
 
-export default app;
+app.listen(3000, () => {
+  console.log("server starteed");
+});
