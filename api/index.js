@@ -7,29 +7,135 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const app = express();
 dotenv.config();
+supportedFunctions = [
+  "AND",
+  "OR",
+  "NOT",
+  "XOR",
+  "IF",
+  "CASE",
+  "LEN",
+  "SUBSTRING",
+  "LEFT",
+  "RIGHT",
+  "ISBLANK",
+  "ISPICKVAL",
+  "CONVERTID",
+  "ABS",
+  "ROUND",
+  "CEILING",
+  "FLOOR",
+  "SQRT",
+  "ACOS",
+  "ASIN",
+  "ATAN",
+  "COS",
+  "SIN",
+  "TAN",
+  "COSH",
+  "SINH",
+  "TANH",
+  "EXP",
+  "LOG",
+  "LOG10",
+  "RINT",
+  "SIGNUM",
+  "INTEGER",
+  "POW",
+  "MAX",
+  "MIN",
+  "MOD",
+  "TEXT",
+  "DATETIME",
+  "DECIMAL",
+  "BOOLEAN",
+  "DATE",
+  "DAY",
+  "MONTH",
+  "YEAR",
+  "HOURS",
+  "MINUTES",
+  "SECONDS",
+  "ADDDAYS",
+  "ADDMONTHS",
+  "ADDYEARS",
+  "ADDHOURS",
+  "ADDMINUTES",
+  "ADDSECONDS",
+  "CONTAINS",
+  "FIND",
+  "LOWER",
+  "UPPER",
+  "MID",
+  "SUBSTITUTE",
+  "TRIM",
+  "VALUE",
+  "CONCATENATE",
+  "TODAY=>$TODAY",
+  "WEEKDAY",
+  "BEGINS",
+];
 
+supportedOperators = [
+  "+",
+  "-",
+  "/",
+  "*",
+  "==",
+  "!=",
+  ">",
+  "<",
+  ">=",
+  "<=",
+  "<>",
+];
 console.log(process.env.GITHUB_TOKEN);
 
 app.use(express.json());
 
-const systemPrompt = `You are a Salesforce formula expert. Follow these rules:
-1. Return ONLY valid Salesforce formula code
-2. Use standard objects/fields (Account, Contact, Opportunity, etc.)
-3. Include error handling with ISBLANK() where applicable
-4. Follow Salesforce formula syntax rules strictly
-5. Always prioritize built-in functions over custom logic
-6. Handle date/time conversions properly
-7. Use proper casing for standard field names
-8. Include comments with /* */ syntax for complex logic
+const systemPrompt = `You are a Salesforce formula expert. Follow these rules STRICTLY:
+
+1. Return ONLY valid Salesforce formula code using these EXCLUSIVE functions/operators:
+   - Functions: ${supportedFunctions.join(", ")}
+   - Operators: ${supportedOperators.join(" ")}
+
+2. Field Reference Format:
+   - ALWAYS use $ObjectApiName.FieldApiName 
+   - Example: $Opportunity.Amount NOT Amount
+
+3. Syntax Requirements:
+   - Text/Picklist values: "Closed"
+   - Numbers: 500 (no quotes)
+   - Percentages: 0.15 NOT 15%
+   - Dates: TODAY() + 7 or ADDDAYS($CustomObject.DateField__c, 3)
+
+4. Error Handling:
+   - Wrap field references in ISBLANK() checks
+   - Handle nulls for all field operations
+
+5. Strict Requirements:
+   - NO comments or explanations
+   - Use EXACT API names with proper casing
+   - Prefer built-in functions over operators
+   - Validate picklist values with ISPICKVAL()
 
 Examples:
-Input: "10% discount on Amount"
-Output: Opportunity.Amount * 0.10
 
-Input: "Check if close date is in current quarter"
+Input: "10% discount when Stage is Closed Won"
 Output: 
-DATEVALUE(CloseDate) >= DATE(YEAR(TODAY()), FLOOR(MONTH(TODAY())/3)*3+1, 1) && 
-DATEVALUE(CloseDate) < DATE(YEAR(TODAY()), FLOOR(MONTH(TODAY())/3)*3+4, 1)
+IF(ISPICKVAL($Opportunity.StageName, "Closed Won"), $Opportunity.Amount * 0.10, 0)
+
+Input: "Account billing state matches shipping"
+Output: 
+$Account.BillingState == $Account.ShippingState
+
+Input: "Opportunity created in last 30 days"
+Output: 
+TODAY() - DATEVALUE($Opportunity.CreatedDate) <= 30
+
+Input: "High priority if contains 'urgent'"
+Output: 
+IF(CONTAINS($Case.Subject, "urgent"), "High", "Normal")
 
 Now process: {input}`;
 
