@@ -7,6 +7,7 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const app = express();
 dotenv.config();
+const sessions = new Map();
 const supportedFunctions = [
   "AND",
   "OR",
@@ -90,6 +91,10 @@ const supportedOperators = [
   "<>",
 ];
 
+function generateSessionId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
+
 app.use(express.json());
 
 const systemPrompt = `You are a Salesforce formula expert. Follow these rules STRICTLY:
@@ -117,6 +122,7 @@ const systemPrompt = `You are a Salesforce formula expert. Follow these rules ST
    - Use EXACT API names with proper casing
    - Prefer built-in functions over operators
    - Validate picklist values with ISPICKVAL()
+   - Use ISBlANK function only on the possible string fields
 
 Examples:
 
@@ -140,25 +146,34 @@ Now process: {input}`;
 
 app.post("/generate-formula", async (req, res) => {
   try {
-    const userInput = req.body.input;
-    if (!userInput) {
+    const { input, sessionId } = req.body;
+    if (!input) {
       return res.status(400).json({ error: "No input provided" });
     }
 
-    const client = ModelClient(
-      "https://models.github.ai/inference",
-      new AzureKeyCredential(process.env.GITHUB_TOKEN)
-    );
+    // Get or create session
+    let currentSessionId = sessionId || generateSessionId();
+    let session = sessions.get(currentSessionId);
 
-    const response = await client.path("/chat/completions").post({
-      body: {
+    if (!session) {
+      session = {
         messages: [
           {
             role: "system",
-            content: systemPrompt.replace("{input}", userInput),
+            content: systemPrompt,
           },
-          { role: "user", content: userInput },
         ],
+      };
+      sessions.set(currentSessionId, session);
+    }
+
+    // Add user message to history
+    session.messages.push({ role: "user", content: input });
+
+    // Get API response
+    const response = await client.path("/chat/completions").post({
+      body: {
+        messages: session.messages,
         model: "gpt-4o",
         temperature: 0.1,
         max_tokens: 4096,
@@ -170,6 +185,7 @@ app.post("/generate-formula", async (req, res) => {
       throw new Error(response.body.error);
     }
 
+    // Process formula response
     const rawFormula = response.body.choices[0].message.content;
     const codeBlockPattern = /```.*?\n(.*?)```/gs;
     const match = codeBlockPattern.exec(rawFormula);
@@ -181,16 +197,17 @@ app.post("/generate-formula", async (req, res) => {
       formula = formula.replace(/`/g, "").trim();
     }
 
+    // Store assistant response
+    session.messages.push({ role: "assistant", content: rawFormula });
+
+    // Return response with session ID
     res.json({
       formula: formula,
-      input: userInput,
+      input: input,
+      sessionId: currentSessionId,
     });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: error.message });
   }
-});
-
-app.listen(3000, () => {
-  console.log("server starteed");
 });
